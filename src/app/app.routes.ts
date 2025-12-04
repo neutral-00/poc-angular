@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
-import { Home } from './component/home/home';
+import { DemoApi } from './component/demo-api/demo-api';
 
 export const routes: Routes = [
-    {path: "", component: Home }
+    { path: 'demo-api', component: DemoApi }
 ];
