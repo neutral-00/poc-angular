@@ -1,133 +1,238 @@
-# PocAngular
-
-# Angular Project Setup - POC
+# Angular - 1.1 Handle API Exceptions Globally - POC
 
 ## Project Metadata
 - Repository: https://github.com/neutral-00/poc-angular
-- branch: main
+- branch:  1-1-handle-api-exception-globally
 
 ## Learning Objective
-1. [x] Setup base project
+1. [x] Handle API Exceptions Globally
 
 ## Pre-requisites
-- First install the angular cli, pnpm and nodejs. Google it, you can do it.
-- At the time of writing, I have
-    - NodeJS: 22.x
-    - Angular CLI: 21.x
-    - pnpm: 10.x
-
-**WARNING** look out for node and angular version compatibility
-
-We will create 2 projects:
-1. poc-angular | created in the new standalone components way(default)
-2. poc-angular-old | created in the old module way
-
-## Create the project - standalone way(default after v17)
-```sh
-ng new poc-angular --skip-install --package-manager=pnpm
-cd poc-angular && pnpm install
-```
-
-## Create the project the old way - module way
-If you want to fall back to the older module approach then run the below command
-```sh
-ng new poc-angular-old --skip-install --package-manager=pnpm --no-standalone
-cd poc-angular-old && pnpm install
-```
-
-To start a local development server, run:
-
-```bash
-ng serve
-```
-
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
-
+- Setup project as in https://github.com/neutral-00/poc-angular main branch
 
 **INFO**
-> if you are wondering what is this prefix poc?
-> I meant Proof Of Concept
-> and both the projects will be git repos
-> main branch will be the base - barebone i.e. the state just after project creation
-> other branches will be created from main and will contain code specific for that poc
-> one more info, for the new poc i have opted tailwind css
-> for the the old one i have opted scss
+> The project is created with angular cli 21.x
+> Tailwind CSS was also added while creating the project
 
 
----
+## Initial Project Structure
+```
+src
+├── app
+│   ├── app.config.ts
+│   ├── app.css
+│   ├── app.html
+│   ├── app.routes.ts
+│   ├── app.spec.ts
+│   ├── app.ts
+│   └── component
+│       └── home
+│           ├── home.css
+│           ├── home.html
+│           ├── home.spec.ts
+│           └── home.ts
+├── index.html
+├── main.ts
+└── styles.css
 
-## What was installed in poc-angular
-```sh
-D:\gp\pocs\poc-angular>pnpm install
-Packages: +479
-++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-Progress: resolved 628, reused 482, downloaded 2, added 368, done
-
-dependencies:
-+ @angular/common 21.0.3
-+ @angular/compiler 21.0.3
-+ @angular/core 21.0.3
-+ @angular/forms 21.0.3
-+ @angular/platform-browser 21.0.3
-+ @angular/router 21.0.3
-+ rxjs 7.8.2
-+ tslib 2.8.1
-
-devDependencies:
-+ @angular/build 21.0.2
-+ @angular/cli 21.0.2
-+ @angular/compiler-cli 21.0.3
-+ @tailwindcss/postcss 4.1.17
-+ jsdom 27.2.0
-+ postcss 8.5.6
-+ tailwindcss 4.1.17
-+ typescript 5.9.3
-+ vitest 4.0.15
 ```
 
+## Completed Tutorial - Standalone Angular 21+ with Tailwind
 
-## Code scaffolding
+## High Level Plan
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+1. **Create API Service** (standalone): `ng g service services/api`
+2. **Create Demo Component**: `ng g component component/demo-api`
+3. **Add HTTP Client & Interceptor** to `app.config.ts`
+4. **Update Routes** in `app.routes.ts`
+5. **Test Global Error Handling**
 
+## Step-by-Step Implementation
+
+### 1. Generate API Service
 ```bash
-ng generate component component-name
+ng g service services/api
 ```
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+**`src/app/services/api.service.ts`**:
+```typescript
+import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
 
+@Injectable({ providedIn: 'root' })
+export class Api {
+  private baseUrl = 'https://jsonplaceholder.typicode.com';
+
+  constructor(private http: HttpClient) {}
+
+  getPosts(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.baseUrl}/posts`);
+  }
+
+  getInvalid(): Observable<any> {
+    return this.http.get<any>(`${this.baseUrl}/invalid-endpoint`);
+  }
+}
+```
+
+### 2. Create Functional Interceptor
+run  `ng g interceptor interceoptor/api-error --skip-tests`
+**`src/app/interceptors/api-error.interceptor.ts`**:
+```typescript
+import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
+import { catchError, throwError } from 'rxjs';
+
+export const apiErrorInterceptor: HttpInterceptorFn = (req, next) => {
+  return next(req).pipe(
+    catchError((error: HttpErrorResponse) => {
+      console.error('Global API Error:', error.status, error.message);
+      alert(`API Error ${error.status}: ${error.message}`);
+      return throwError(() => error);
+    })
+  );
+};
+```
+
+### 3. Generate Demo Component
 ```bash
-ng generate --help
+ng g component component/demo-api --skip-tests
 ```
 
-## Building
+**`src/app/component/demo-api/demo-api.ts`**:
+```typescript
+import { CommonModule } from '@angular/common';
+import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Api } from '../../service/api';
 
-To build the project run:
+@Component({
+  selector: 'app-demo-api',
+  imports: [CommonModule],
+  templateUrl: './demo-api.html',
+  styleUrl: './demo-api.css',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class DemoApi {
+  response = signal<any>(null);
+  loading = signal(false);
 
-```bash
-ng build
+  constructor(private apiService: Api) {}
+
+  callValidApi() {
+    this.loading.set(true);
+    this.response.set(null);
+    this.apiService.getPosts().subscribe({
+      next: (data) => {
+        this.response.set(data.slice(0, 3)); // First 3 posts
+        this.loading.set(false);
+      },
+      error: (err) => this.loading.set(false)
+    });
+  }
+
+  callInvalidApi() {
+    this.loading.set(true);
+    this.response.set(null);
+    this.apiService.getInvalid().subscribe({
+      next: (data) => {
+        this.response.set(data);
+        this.loading.set(false);
+      },
+      error: (err) => {
+        this.loading.set(false);
+        // Error handled by interceptor - won't reach here
+      }
+    });
+  }
+}
+```
+Update its template as below:
+```html
+<div class="max-w-2xl mx-auto p-6 bg-white shadow-lg rounded-lg mt-10">
+<h2 class="text-2xl font-bold text-gray-800 mb-6">API Exception Demo</h2>
+
+<div class="space-y-4 mb-8">
+    <button (click)="callValidApi()"
+    class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg transition duration-200">
+    ✅ Valid API Call (/posts)
+    </button>
+
+    <button (click)="callInvalidApi()"
+    class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg transition duration-200">
+    ❌ Invalid API (Triggers Interceptor)
+    </button>
+</div>
+
+@if (response()) {
+    <div class="bg-gray-50 p-4 rounded-lg">
+    <h3 class="font-semibold text-gray-700 mb-2">Response:</h3>
+    <pre class="text-sm overflow-auto max-h-96">{{ response() | json }}</pre>
+    </div>
+}
+
+@if (loading()) {
+    <div class="text-center py-4">
+    <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+    </div>
+}
+</div>
+
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+### 4. Update App Config (`app.config.ts`)
+```typescript
+import { ApplicationConfig } from '@angular/core';
+import { provideRouter } from '@angular/router';
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { routes } from './app.routes';
+import { apiErrorInterceptor } from './interceptors/api-error.interceptor';
 
-## Running unit tests
-
-To execute unit tests with the [Karma](https://karma-runner.github.io) test runner, use the following command:
-
-```bash
-ng test
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideRouter(routes),
+    provideHttpClient(
+      withInterceptors([apiErrorInterceptor])
+    )
+  ]
+};
 ```
 
-## Running end-to-end tests
+### 5. Update Routes (`app.routes.ts`)
+```typescript
+import { Routes } from '@angular/router';
+import { DemoApi } from './component/demo-api/demo-api';
 
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
+export const routes: Routes = [
+    { path: 'demo-api', component: DemoApi }
+];
 ```
 
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+### 6. Update Home Component Navigation
+**`src/app/app.html`** (add link):
+```html
+<!-- Add to existing template -->
+<div class="p-8">
+  <a routerLink="/demo-api" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold">
+    🚀 Try API Exception Demo
+  </a>
+</div>
+```
 
-## Additional Resources
+## Testing
+1. Run `ng serve`
+2. Navigate to `/demo-api`
+3. **Valid API**: Shows first 3 posts
+4. **Invalid API**: Console logs error + alert popup (interceptor triggered)
+5. **No crashes**, clean global error handling
 
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+## Key Modern Features Used
+- ✅ **Standalone components/services**
+- ✅ **Functional interceptors** (`HttpInterceptorFn`)
+- ✅ **`provideHttpClient()`** (no HttpClientModule)
+- ✅ **Tailwind CSS** styling
+- ✅ **Angular 21+** patterns[1]
+
+**Result**: Production-ready global API error handling with modern Angular architecture.[2]
+
+[1](https://angular.dev/guide/http/setup)
+[2](https://github.com/neutral-00/poc-angular)
